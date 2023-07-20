@@ -1,0 +1,1 @@
+# This Repo is responsible for have some extra modules that should be used with the Vuestorefront Repo: https://github.com/odoogap/vuestorefront
