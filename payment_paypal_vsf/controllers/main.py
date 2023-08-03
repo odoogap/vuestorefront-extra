@@ -20,12 +20,13 @@ _logger = logging.getLogger(__name__)
 class PaypalControllerInherit(PaypalController):
     _return_url = '/payment/paypal/return/'
     _webhook_url = '/payment/paypal/webhook/'
+    _return_with_reference_url = '/payment/paypal/return/<string:reference>/'
 
     @http.route(
-        _return_url, type='http', auth='public', methods=['GET', 'POST'], csrf=False,
+        [_return_url, _return_with_reference_url], type='http', auth='public', methods=['GET', 'POST'], csrf=False,
         save_session=False
     )
-    def paypal_return_from_checkout(self, **pdt_data):
+    def paypal_return_from_checkout(self, reference, **pdt_data):
         """ Process the PDT notification sent by PayPal after redirection from checkout.
 
         The PDT (Payment Data Transfer) notification contains the parameters necessary to verify the
@@ -90,8 +91,21 @@ class PaypalControllerInherit(PaypalController):
                 # Redirect to Error Page
                 return werkzeug.utils.redirect(vsf_payment_error_return_url)
 
-        # Problem: We don't have how to know the correct transaction, to return the User to the correct website
-        # Returns User to Odoo when:
-        # -> User clicks on "Cancel the Payment";
-        # -> Transaction created on Odoo;
+        # Used to cancel one payment, using the button "Cancel and return"
+        if reference:
+            tx_sudo = request.env['payment.transaction'].sudo().search([('reference', '=', reference)], limit=1)
+            if tx_sudo and tx_sudo.id and tx_sudo.created_on_vsf:
+                # Check the Order and respective website related with the transaction
+                # Check the payment_return url for the Error Page
+                sale_order_ids = tx_sudo.sale_order_ids.ids
+                sale_order = request.env['sale.order'].sudo().search([
+                    ('id', 'in', sale_order_ids), ('website_id', '!=', False)
+                ], limit=1)
+                # Get Website
+                website = sale_order.website_id
+                # Redirect to VSF
+                vsf_payment_error_return_url = website.vsf_payment_error_return_url
+                # Redirect to Error Page
+                return werkzeug.utils.redirect(vsf_payment_error_return_url)
+
         return request.redirect('/payment/status')
