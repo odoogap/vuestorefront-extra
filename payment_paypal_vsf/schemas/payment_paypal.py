@@ -5,9 +5,10 @@
 import graphene
 from graphene.types import generic
 from graphql import GraphQLError
-from odoo import _
-from odoo.http import request
 
+from odoo import _
+
+from odoo.addons.payment import utils as payment_utils
 from odoo.addons.website_sale.controllers.main import PaymentPortal
 
 
@@ -31,30 +32,38 @@ class PaypalTransaction(graphene.Mutation):
         PaymentProvider = env['payment.provider'].sudo()
         PaymentTransaction = env['payment.transaction'].sudo()
         website = env['website'].get_current_website()
-        request.website = website
         order = website.sale_get_order()
         domain = [
             ('id', '=', provider_id),
             ('state', 'in', ['enabled', 'test']),
         ]
 
-        payment_provider_id = PaymentProvider.search(domain, limit=1)
-        if not payment_provider_id:
+        payment_provider = PaymentProvider.search(domain, limit=1)
+        payment_method = payment_provider.payment_method_ids[0] if payment_provider.payment_method_ids else None
+
+        if not payment_method:
+            raise GraphQLError(_('Payment Method does not exist.'))
+
+        if not payment_provider:
             raise GraphQLError(_('Payment Provider does not exist.'))
 
-        if not payment_provider_id.code == 'paypal':
+        if not payment_provider.code == 'paypal':
             raise GraphQLError(_('Payment Provider "Paypal" does not exist.'))
+
+        # Generate a new access token
+        access_token = payment_utils.generate_access_token(order.partner_id.id, order.amount_total, order.currency_id.id)
+        order.access_token = access_token
 
         transaction = PaymentPortal().shop_payment_transaction(
             order_id=order.id,
             access_token=order.access_token,
-            payment_option_id=provider_id,
+            provider_id=provider_id,
+            payment_method_id=payment_method.id,
+            token_id=None,
             amount=order.amount_total,
-            currency_id=order.currency_id.id,
-            partner_id=order.partner_id.id,
             flow='redirect',
             tokenization_requested=False,
-            landing_route='/shop/payment/validate'
+            landing_route='/shop/payment/validate',
         )
 
         transaction_id = PaymentTransaction.search([('reference', '=', transaction['reference'])], limit=1)

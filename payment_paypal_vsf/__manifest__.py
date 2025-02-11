@@ -5,7 +5,7 @@
 {
     # Application Information
     'name': 'PayPal Payment Provider to VSF',
-    'category': 'Accounting/Payment Acquirers',
+    'category': 'Accounting/Payment Providers',
     'version': '17.0.1.0.0',
     'summary': 'Paypal Payment Acquirer: Adapting PayPal to VSF',
 
