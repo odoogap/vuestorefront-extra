@@ -19,7 +19,6 @@
     'depends': [
         'payment',
         'payment_paypal',
-        'website_payment_paypal',
     ],
 
     # Views
