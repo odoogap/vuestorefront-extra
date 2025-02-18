@@ -80,7 +80,12 @@ class PaypalControllerInherit(PaypalController):
         # Transaction created on VSF
         if tx_sudo and tx_sudo.created_on_vsf:
             payment_status = notification_data.get('payment_status')
-            if payment_status in PAYMENT_STATUS_MAPPING['done']:
+            pending_reason = notification_data.get('pending_reason')
+            if (
+                payment_status in PAYMENT_STATUS_MAPPING['done'] or
+                payment_status in PAYMENT_STATUS_MAPPING['authorized'] or
+                (payment_status in PAYMENT_STATUS_MAPPING['pending'] and pending_reason == 'authorization')
+            ):
                 # Confirm sale order
                 # PaymentPostProcessing().poll_status()
                 return werkzeug.utils.redirect(vsf_payment_success_return_url)
