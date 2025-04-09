@@ -10,6 +10,7 @@ from werkzeug.exceptions import Forbidden
 
 from odoo import http, _
 from odoo.http import request
+from odoo.exceptions import ValidationError
 from odoo.addons.payment import utils as payment_utils
 from odoo.addons.payment_paypal.const import PAYMENT_STATUS_MAPPING
 from odoo.addons.payment_paypal.controllers.main import PaypalController
@@ -141,3 +142,32 @@ class PaypalControllerInherit(PaypalController):
         else:
             # Redirect the user to the status page.
             return request.redirect('/payment/status')
+
+    @http.route(_webhook_url, type='http', auth='public', methods=['GET', 'POST'], csrf=False)
+    def paypal_webhook(self, **data):
+        """ Process the notification data (IPN) sent by PayPal to the webhook.
+
+        The "Instant Payment Notification" is a classical webhook notification.
+        See https://developer.paypal.com/api/nvp-soap/ipn/.
+
+        :param dict data: The notification data
+        :return: An empty string to acknowledge the notification
+        :rtype: str
+        """
+        _logger.info("notification received from PayPal with data:\n%s", pprint.pformat(data))
+        try:
+            # Check the origin and integrity of the notification
+            tx_sudo = request.env['payment.transaction'].sudo()._get_tx_from_notification_data(
+                'paypal', data
+            )
+            self._verify_webhook_notification_origin(data, tx_sudo)
+
+            # Handle the notification data
+            # Prevent this "Handle Notification" to prevent this error -> "Error, a partner cannot follow twice the same object."
+            # tx_sudo._handle_notification_data('paypal', data)
+
+        except ValidationError:  # Acknowledge the notification to avoid getting spammed
+            _logger.warning(
+                "unable to handle the notification data; skipping to acknowledge", exc_info=True
+            )
+        return ''
